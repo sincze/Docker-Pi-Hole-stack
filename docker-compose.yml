@@ -1,0 +1,98 @@
+# My Pi-Hole stack 
+#
+# Author: S. Incze
+#
+# Version 1.0 29-12-2020
+#
+# More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
+#
+# Usage: 
+# Change the ServerIP: "PUT YOUR HOST IP IN HERE", to your host IP.
+#
+# Issue a docker-compose up -d to bring up the stack
+
+version: "3"
+
+services:
+  pihole:
+    container_name: pihole
+    hostname: pihole
+    image: pihole/pihole:latest
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp"
+      - "85:80/tcp"
+#      - "443:443/tcp"
+    environment:
+       ServerIP: "PUT YOUR HOST IP IN HERE"
+       TZ: "Europe/Amsterdam"
+       WEBPASSWORD: "topsecret"
+       INTERFACE: "eth0"
+       DNS1: "10.0.0.4#5053"
+       DNS2: "10.0.0.2#5054"
+    # Volumes store your data between container upgrades
+    volumes:
+       - etc-pihole:/etc/pihole/
+       - etc-dnsmasq.d:/etc/dnsmasq.d/
+    dns:
+      - 127.0.0.1
+      - 192.168.50.12
+    # Recommended but not required (DHCP needs NET_ADMIN)
+    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+    cap_add:
+      - NET_ADMIN
+    networks:
+      pihole_net:
+        ipv4_address: 10.0.0.3
+
+  cloudflared:
+    hostname: cloudflared
+    container_name: cloudflared
+    image: visibilityspots/cloudflared:arm
+    restart: unless-stopped
+    networks:
+      pihole_net:
+        ipv4_address: 10.0.0.2
+
+  unbound:
+  # https://hub.docker.com/r/klutchell/unbound
+    container_name: unbound
+    hostname: unbound
+    image: klutchell/unbound
+    restart: unless-stopped
+    ports:
+      - "5053:5053/udp"
+    networks:
+       pihole_net:
+         ipv4_address: 10.0.0.4
+
+  portainer:
+    container_name: portainer
+    image: portainer/portainer-ce
+    ports:
+      - "9000:9000"
+      - "8000:8000"
+    volumes:
+      - portainer_data:/data
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+       pihole_net:
+         ipv4_address: 10.0.0.5
+
+volumes:
+  etc-pihole:
+    driver: local
+  etc-dnsmasq.d:
+    driver: local
+  portainer_data:
+    driver: local
+
+networks:
+  pihole_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/29
+
